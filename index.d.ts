@@ -52,7 +52,7 @@ declare module 'react-native-zendesk-v2' {
     // user's email
     email: string
     // user's phone
-    phone?: number
+    phone?: string
     // department to redirect the chat
     department?: string
     // tags for chat
