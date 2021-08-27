@@ -236,15 +236,15 @@ public class RNZendeskChat extends ReactContextBaseJavaModule {
 
         if (visitorInfo.hasKey("name")) {
             String name = visitorInfo.getString("name");
-            visitorInfoBuilder = visitorInfoBuilder.withName(name);
+            visitorInfoBuilder.withName(name);
         }
         if (visitorInfo.hasKey("email")) {
             String email = visitorInfo.getString("email");
-            visitorInfoBuilder = visitorInfoBuilder.withEmail(email);
+            visitorInfoBuilder.withEmail(email);
         }
         if (visitorInfo.hasKey("phone")) {
             String phone = visitorInfo.getString("phone");
-            visitorInfoBuilder = visitorInfoBuilder.withPhoneNumber(phone);
+            visitorInfoBuilder.withPhoneNumber(phone);
         }
 
         VisitorInfo builtVisitorInfo = visitorInfoBuilder.build();
