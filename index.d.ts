@@ -1,62 +1,283 @@
 declare module 'react-native-zendesk-v2' {
 
-  // function to display chat box
-  export function startChat(chatOptions: ChatOptions): void;
-
-  // normal init function when you want to use all of the sdks
-  export function init(initializationOptins: InitOptions): void;
-
-  // init function when you just want to use chat sdk
-  export function initChat(accountKey: string): void;
-
-  // function to set primary color code for the chat theme, pass hex code of the color here
-  export function setPrimaryColor(color: string): void;
-
-  // function to display help center UI
-  export function showHelpCenter(chatOptions: ChatOptions): void;
-
-  // function to set visitor info in chat
-  export function setVisitorInfo(visitorInfo: UserInfo): void;
-
-  // function to register notifications token with zendesk
-  export function setNotificationToken(token: string): void;
+  type PreChatFormFieldStatusType = 'REQUIRED' | 'OPTIONAL' | 'HIDDEN'
+  type ArticlesFilterType = 'category' | 'section' | 'label'
   
-  interface ChatOptions extends UserInfo {
-    botName?: string
-    // boolean value if you want just chat sdk or want to use all the sdk like support, answer bot and chat
-    // true value means just chat sdk
-    chatOnly?: boolean
-    // hex code color to set on chat
-    color?: string
-    /* help center specific props only */
-    // sent in help center function only to show help center with/without chat
-    withChat?: boolean
-    // to enable/disable ticket creation in help center
-    disableTicketCreation?: boolean
-  }
-
-  interface InitOptions {
-    // chat key of zendesk account to init chat
-    key: string,
-    // appId of your zendesk account
+  /**
+  * Unified SDK initialization options
+  */
+  interface ISDKInitOptions {
+    /** 
+    * Account key of your Zendesk account 
+    */
+    accountKey: string,
+    /**
+    * AppId of your Zendesk mobile SDK 
+    */
     appId: string,
-    // clientId of your zendesk account
+    /**
+    * ClientId of your Zendesk mobile SDK 
+    */
     clientId: string,
-    // support url of zendesk account
-    url: string,
+    /**
+    * Support URL of your Zendesk mobile SDK (should end with /)
+    */
+    supportUrl: string,
   }
 
-  interface UserInfo {
-     // user's name
+  interface IUserIdentity {
+    /*
+    * Creates a JWT identity that will be used during identification of a user. 
+    * The user identifier will typically be used by the remote system to identify the user there and 
+    * pass back a token which will be used to identify that user in the Zendesk instance.
+    */
+    jwtToken?: string,
+    /**
+    * User name 
+    */
     name: string
-    // user's email
+    /**
+    * User email 
+    */
     email: string
-    // user's phone
+  }
+
+  interface IVisitorInfo {
+    /**
+    * Visitor name 
+    */
+    name: string
+    /**
+    * Visitor email 
+    */
+    email: string
+    /** 
+    * Visitor phone (optional)
+    */
     phone?: string
-    // department to redirect the chat
+    /** 
+    * Department to redirect chat (optional) 
+    */
     department?: string
-    // tags for chat
+    /**
+    * Tags to set for the chat to better redirect (optional) 
+    */
     tags?: Array<string>
   }
 
+  interface IArticlesFilter{
+    /**
+    * The type of the filter to be applied.
+    */
+    type: ArticlesFilterType
+    /**
+    * The filter values to be applied based on selected type.
+    */
+    values: Array<string>
+  }
+
+  /**
+  * Choose what chat menu action items are enabled
+  */
+  interface IChatMenuActions {
+    /**
+    * Enable chat end menu item
+    * @default true
+    */
+    enableEndChatMenuItem?: boolean
+    /**
+    * Enable chat transcript menu item
+    * @default true
+    */
+    enableChatTranscriptMenuItem?: boolean
+  }
+
+  /**
+  * In case you have enabled pre chat forms, you can configure what fields to be required, optional or hidden.
+  * Read more about them here:
+  * https://developer.zendesk.com/embeddables/docs/chat-sdk-v-2-for-ios/customize_the_look#configuring-a-pre-chat-form
+  */
+  interface IPreChatFormOptions {
+    /**
+    * Pre chat ask for name option
+    * @default "OPTIONAL"
+    */
+    name?: PreChatFormFieldStatusType
+    /**
+    * Pre chat ask for email option
+    * @default "OPTIONAL"
+    */
+    email?: PreChatFormFieldStatusType
+    /**
+    * Pre chat ask for phone option
+    * @default "OPTIONAL"
+    */
+    phone?: PreChatFormFieldStatusType
+    /**
+    * Pre chat ask for department option
+    * @default "OPTIONAL"
+    */
+    department? : PreChatFormFieldStatusType
+  }
+
+  /**
+  * Default options to configure the chat.
+  * Read more about them here: 
+  * https://developer.zendesk.com/embeddables/docs/chat-sdk-v-2-for-ios/customize_the_look#customizing-the-chat-experience
+  */
+  interface IChatConfigurationOptions {
+    /**
+    * Agent availability is a feature that prevents the visitor from sending messages when there are no agents online. 
+    * Enabling this feature will prevent your business from getting missed chats.
+    * @default true
+    */
+    enableAgentAvailability?: boolean
+    /**
+    * Toggles the flag to either enable or disable the email transcript prompt at the end of a chat that allows end users to request a transcript.
+    * @default true
+    */
+    enableChatTranscriptPrompt?: boolean
+    /**
+    * Offline form is an alternative feature to live chat that can be used to contact the business when all agents are unavailable while avoiding missed chats.
+    * Similarly to pre-Chat, the offline form also collects information about the visitor in a conversational manner prior to sending the form.
+    * @default true
+    */
+    enableOfflineForm?: boolean
+    /**
+    * Pre-Chat form is a feature that collects information about the visitor in a conversational manner prior to starting the chat.
+    * If true, you can also set specific fields to be required, optional or hidden in pre chat.
+    * @default true
+    */
+    enablePreChatForm?: boolean
+    /**
+    * In case you have enabled pre chat forms, you can configure what fields to be required, optional or hidden
+    */
+    preChatFormOptions?: IPreChatFormOptions
+    /**
+    * Allows overriding of the conversation menu. By default the menu contains all ChatMenuAction items.
+    * @default true
+    */
+    enableChatMenuActions?: boolean
+    /**
+    * In case you have enabled chat menu actions, you can configure what menu items are enabled
+    */
+    chatMenuActions?: IChatMenuActions
+  }
+
+  /**
+  * Define all chat and help center common used options
+  */
+  interface ICommonOptions {
+    /** 
+    * The user identity to start chat and help center (optional) 
+    */
+    userIdentity?: IUserIdentity
+    /** 
+    * The visitor info to start chat and help center (optional) 
+    */
+    visitorInfo?: IVisitorInfo
+}
+  
+  /**
+  * Define all chat options
+  */
+  interface IChatOptions extends ICommonOptions {
+    /** 
+    * Chat toolbar title (Android only) 
+    */
+    toolbarTitle?: string
+    /** 
+    * Chat close button text (iOS only)
+    */
+    closeButtonText?: string
+    /** 
+    * The alias name of the chat bot (optional)
+    * @default 'Answer Bot'
+    */
+    botName?: string
+    /**
+    * True - use only chat SDK in chat
+    * False - use all unified SDKs in chat (answer bot, support and chat)
+    * @default false
+    */
+    chatOnly?: boolean
+    /**
+    * Default options to configure the chat (optional).
+    */
+    chatConfigurationOptions?: IChatConfigurationOptions
+  }
+
+  /**
+  * Define all help center options
+  */
+  interface IHelpCenterOptions extends ICommonOptions {
+    /**
+    * Whether you also want the help center to give live chat option at bottom (optional)
+    */
+    withChat?: boolean
+    /**
+    * In case you want to not let users create tickets (optional)
+    */
+    disableTicketCreation?: boolean
+    /**
+    * Apply filters to articles list by category, section or label types.
+    * Add an array with the respective values from the selected type.
+    */
+    articlesFilter?: IArticlesFilter
+  }
+
+  /**
+  * To initialize the Zendesk with all SDK unified capabilities
+  * @param initializationOptions
+  */
+  export function init(initializationOptions: ISDKInitOptions): void;
+
+  /**
+  * To initialize the chat SDK only, to be used only if you just want chat SDK
+  * @param accountKey 
+  */
+  export function initChat(accountKey: string): void;
+
+  /**
+  * Function to reset user identify information
+  */
+  export function resetUserIdentity(): void;
+
+  /**
+  * Set the Identity for the SDK. If there is a previously stored Identity and this sets different Identity any user data will be wiped from the SDK.
+  * userIdentity can be set multiple times with different valid identities.
+  * @param userIdentity 
+  */
+  export function setUserIdentity(userIdentity: IUserIdentity): void;
+
+  /**
+  * Sets the information about the visitor.
+  * Visitor information persists across chat sessions.
+  * @param visitorInfo 
+  */
+  export function setVisitorInfo(visitorInfo: IVisitorInfo): void;
+
+  /**
+  * Set chat primary color (iOS only)
+  * @param color 
+  */
+  export function setPrimaryColor(color: string): void;
+
+  /**
+  * Function to register your notification token with Zendesk, to receive notifications on device
+  * @param token 
+  */
+  export function setNotificationToken(token: string): void;
+
+  /**
+  * To start a chat session
+  * @param chatOptions
+  */
+  export function startChat(chatOptions: IChatOptions): void;
+
+  /**
+  * To show help center from Zendesk Support SDK, can also have chat feature
+  * @param helpCenterOptions 
+  */
+  export function showHelpCenter(helpCenterOptions: IHelpCenterOptions): void;
 }

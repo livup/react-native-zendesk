@@ -1,207 +1,347 @@
 
 #import "RNZendeskChat.h"
+
+#import <ZendeskCoreSDK/ZendeskCoreSDK.h>
+#import <CommonUISDK/CommonUISDK.h>
+#import <SDKConfigurations/SDKConfigurations.h>
 #import <AnswerBotSDK/AnswerBotSDK.h>
 #import <AnswerBotProvidersSDK/AnswerBotProvidersSDK.h>
 #import <ChatSDK/ChatSDK.h>
 #import <ChatProvidersSDK/ChatProvidersSDK.h>
 #import <MessagingSDK/MessagingSDK.h>
-#import <CommonUISDK/CommonUISDK.h>
+#import <MessagingAPI/MessagingAPI.h>
 #import <SupportSDK/SupportSDK.h>
 #import <SupportProvidersSDK/SupportProvidersSDK.h>
-#import <ZendeskCoreSDK/ZendeskCoreSDK.h>
+
+#import <React/RCTConvert.h>
+
+@implementation RCTConvert (ZDKChatFormFieldStatus)
+
+RCT_ENUM_CONVERTER(ZDKFormFieldStatus,
+                   (@{
+                       @"REQUIRED": @(ZDKFormFieldStatusRequired),
+                       @"OPTIONAL": @(ZDKFormFieldStatusOptional),
+                       @"HIDDEN": @(ZDKFormFieldStatusHidden),
+                    }),
+                   ZDKFormFieldStatusOptional,
+                   integerValue);
+
+@end
 
 @implementation RNZendeskChat
 
 RCT_EXPORT_MODULE()
 
-RCT_EXPORT_METHOD(setVisitorInfo:(NSDictionary *)options) {
-  ZDKChatAPIConfiguration *config = [[ZDKChatAPIConfiguration alloc] init];
-  if (options[@"department"]) {
-    config.department = options[@"department"];
-  }
-  if (options[@"tags"]) {
-    config.tags = options[@"tags"];
-  }
-  config.visitorInfo = [[ZDKVisitorInfo alloc] initWithName:options[@"name"]
-                                                email:options[@"email"]
-                                                phoneNumber:options[@"phone"]];
-  ZDKChat.instance.configuration = config;
-  
-  NSLog(@"Setting visitor info: department: %@ tags: %@, email: %@, name: %@, phone: %@", config.department, config.tags, config.visitorInfo.email, config.visitorInfo.name, config.visitorInfo.phoneNumber);
-}
+static NSString *const LOG_TAG = @"RNZendeskChat:";
 
-RCT_EXPORT_METHOD(chatConfiguration: (NSDictionary *)options) {
-    ZDKChatConfiguration *chatConfiguration = [[ZDKChatConfiguration alloc] init];
-    if (options[@"chatMenuActions"]) {
-        chatConfiguration.chatMenuActions = options[@"chatMenuActions"];
-    }
-    if (options[@"isChatTranscriptPromptEnabled"]) {
-        chatConfiguration.isChatTranscriptPromptEnabled = options[@"isChatTranscriptPromptEnabled"];
-    }
-    if (options[@"isPreChatFormEnabled"]) {
-        chatConfiguration.isPreChatFormEnabled = options[@"isPreChatFormEnabled"];
-    }
-    if (options[@"isOfflineFormEnabled"]) {
-        chatConfiguration.isOfflineFormEnabled = options[@"isOfflineFormEnabled"];
-    }
-    if (options[@"isAgentAvailabilityEnabled"]) {
-        chatConfiguration.isAgentAvailabilityEnabled = options[@"isAgentAvailabilityEnabled"];
-    }
-}
-
-RCT_EXPORT_METHOD(startChat:(NSDictionary *)options) {
-  [self setVisitorInfo:options];
-
-  dispatch_sync(dispatch_get_main_queue(), ^{
-    [self startChatFunction:options];
-  });
-}
-
-RCT_EXPORT_METHOD(showHelpCenter:(NSDictionary *)options) {
-  [self setVisitorInfo:options];
-  dispatch_sync(dispatch_get_main_queue(), ^{
-    [self showHelpCenterFunction:options];
-  });
-}
-
-RCT_EXPORT_METHOD(setUserIdentity: (NSDictionary *)user) {
-  if (user[@"token"]) {
-    id<ZDKObjCIdentity> userIdentity = [[ZDKObjCJwt alloc] initWithToken:user[@"token"]];
-    [[ZDKZendesk instance] setIdentity:userIdentity];
-  } else {
-    id<ZDKObjCIdentity> userIdentity = [[ZDKObjCAnonymous alloc] initWithName:user[@"name"] // name is nullable
-                                          email:user[@"email"]]; // email is nullable
-    [[ZDKZendesk instance] setIdentity:userIdentity];
-  }
-}
-
-RCT_EXPORT_METHOD(init:(NSDictionary *)options) {
-  [ZDKZendesk initializeWithAppId:options[@"appId"]
-      clientId: options[@"clientId"]
-      zendeskUrl: options[@"url"]];
-  [ZDKSupport initializeWithZendesk: [ZDKZendesk instance]];
-  [ZDKAnswerBot initializeWithZendesk:[ZDKZendesk instance] support:[ZDKSupport instance]];
-  [ZDKChat initializeWithAccountKey:options[@"key"] queue:dispatch_get_main_queue()];
-}
-
-RCT_EXPORT_METHOD(initChat:(NSString *)key) {
-  [ZDKChat initializeWithAccountKey:key queue:dispatch_get_main_queue()];
-}
-
-RCT_EXPORT_METHOD(setPrimaryColor:(NSString *)color) {
-  [ZDKCommonTheme currentTheme].primaryColor = [self colorFromHexString:color];
-}
-
-RCT_EXPORT_METHOD(setNotificationToken:(NSData *)deviceToken) {
-  dispatch_sync(dispatch_get_main_queue(), ^{
-    [self registerForNotifications:deviceToken];
-  });
-}
-
-- (UIColor *)colorFromHexString:(NSString *)hexString {
+- (UIColor *)colorFromHexString: (NSString *)hexString {
     unsigned rgbValue = 0;
-    NSScanner *scanner = [NSScanner scannerWithString:hexString];
-    [scanner setScanLocation:1]; // bypass '#' character
-    [scanner scanHexInt:&rgbValue];
-    return [UIColor colorWithRed:((rgbValue & 0xFF0000) >> 16)/255.0 green:((rgbValue & 0xFF00) >> 8)/255.0 blue:(rgbValue & 0xFF)/255.0 alpha:1.0];
+    NSScanner *scanner = [NSScanner scannerWithString: hexString];
+    [scanner setScanLocation: 1]; // bypass '#' character
+    [scanner scanHexInt: &rgbValue];
+    
+    return [UIColor colorWithRed: ((rgbValue & 0xFF0000) >> 16)/255.0 green:((rgbValue & 0xFF00) >> 8)/255.0 blue:(rgbValue & 0xFF)/255.0 alpha:1.0];
 }
 
-- (void) showHelpCenterFunction:(NSDictionary *)options {
-    NSError *error = nil;
-    ZDKChatEngine *chatEngine = [ZDKChatEngine engineAndReturnError:&error];
-    ZDKSupportEngine *supportEngine = [ZDKSupportEngine engineAndReturnError:&error];
-    NSArray *engines = @[];
-    ZDKMessagingConfiguration *messagingConfiguration = [ZDKMessagingConfiguration new];
-    NSString *botName = @"ChatBot";
-    if (options[@"botName"]) {
-      botName = options[@"botName"];
-    }
-    if (options[@"withChat"]) {
-      engines = @[(id <ZDKEngine>) [ZDKChatEngine engineAndReturnError:&error]];
-    }
-    ZDKHelpCenterUiConfiguration* helpCenterUiConfig = [ZDKHelpCenterUiConfiguration new];
-    helpCenterUiConfig.objcEngines = engines;
-    ZDKArticleUiConfiguration* articleUiConfig = [ZDKArticleUiConfiguration new];
-    articleUiConfig.objcEngines = engines;
-     if (options[@"disableTicketCreation"]) {
-         helpCenterUiConfig.showContactOptions = NO;
-         articleUiConfig.showContactOptions = NO;
-    }
-    UIViewController* controller = [ZDKHelpCenterUi buildHelpCenterOverviewUiWithConfigs: @[helpCenterUiConfig, articleUiConfig]];
-    // controller.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle: @"Close"
-    //                                                                                    style: UIBarButtonItemStylePlain
-    //                                                                                   target: self
-    //                                                                                   action: @selector(chatClosedClicked)];
 
+- (ZDKChatFormConfiguration * _Nullable)getPreChatFormConfiguration:(NSDictionary*)preChatFormOptions {
+    #define ParseFormFieldStatus(key)\
+        ZDKFormFieldStatus key = [RCTConvert ZDKFormFieldStatus:preChatFormOptions[@"" #key]]
+        ParseFormFieldStatus(name);
+        ParseFormFieldStatus(email);
+        ParseFormFieldStatus(phone);
+        ParseFormFieldStatus(department);
+    #undef ParseFormFieldStatus
+
+    return [[ZDKChatFormConfiguration alloc] initWithName:name
+                                             email:email
+                                             phoneNumber:phone
+                                             department:department];
+}
+
+- (ZDKChatConfiguration *) getChatConfiguration: (NSDictionary *)chatConfigurationOptions {
+    ZDKChatConfiguration *chatConfiguration = [[ZDKChatConfiguration alloc] init];
+        
+    if(chatConfigurationOptions != Nil && chatConfigurationOptions != NULL) {
+        if (chatConfigurationOptions[@"enableChatMenuActions"]) {
+            BOOL isMenuActionsEnabled = [RCTConvert BOOL:chatConfigurationOptions[@"enableChatMenuActions"]];
+            
+            if(isMenuActionsEnabled) {
+                if(chatConfigurationOptions[@"chatMenuActions"]) {
+                    NSDictionary *chatMenuActions = chatConfigurationOptions[@"chatMenuActions"];
+                    BOOL isEndChatMenuItemEnabled = YES;
+                    BOOL isChatTranscriptMenuItemEnabled = YES;
+                    
+                    if(chatMenuActions[@"enableEndChatMenuItem"]) {
+                        isEndChatMenuItemEnabled = [RCTConvert BOOL:chatMenuActions[@"enableEndChatMenuItem"]];
+                    }
+                    if(chatMenuActions[@"enableChatTranscriptMenuItem"]) {
+                        isChatTranscriptMenuItemEnabled = [RCTConvert BOOL:chatMenuActions[@"enableChatTranscriptMenuItem"]];
+                    }
+
+                    BOOL enableOnlyEndChat = isEndChatMenuItemEnabled == YES && isChatTranscriptMenuItemEnabled == NO;
+                    BOOL enableOnlyChatTranscript = isEndChatMenuItemEnabled == NO && isChatTranscriptMenuItemEnabled == YES;
+
+                    if(enableOnlyEndChat) {
+                        chatConfiguration.chatMenuActions = @[@(ZDKChatMenuActionEndChat)];
+                    } else if(enableOnlyChatTranscript) {
+                        chatConfiguration.chatMenuActions = @[@(ZDKChatMenuActionEmailTranscript)];
+                    }
+                }
+            }
+            else {
+                chatConfiguration.chatMenuActions = @[];
+            }
+        }
+        
+        if(chatConfigurationOptions[@"enableAgentAvailability"]) {
+            BOOL isAgentAvailabilityEnabled = [RCTConvert BOOL:chatConfigurationOptions[@"enableAgentAvailability"]];
+            chatConfiguration.isAgentAvailabilityEnabled = isAgentAvailabilityEnabled;
+        }
+        
+        if(chatConfigurationOptions[@"enableChatTranscriptPrompt"]) {
+            BOOL isChatTranscriptPromptEnabled = [RCTConvert BOOL:chatConfigurationOptions[@"enableChatTranscriptPrompt"]];
+            chatConfiguration.isChatTranscriptPromptEnabled = isChatTranscriptPromptEnabled;
+        }
+        
+        if(chatConfigurationOptions[@"enableOfflineForm"]) {
+            BOOL isOfflineFormEnabled = [RCTConvert BOOL:chatConfigurationOptions[@"enableOfflineForm"]];
+            chatConfiguration.isOfflineFormEnabled = isOfflineFormEnabled;
+        }
+        
+        if(chatConfigurationOptions[@"enablePreChatForm"]) {
+            BOOL isPreChatFormEnabled = [RCTConvert BOOL:chatConfigurationOptions[@"enablePreChatForm"]];
+            chatConfiguration.isPreChatFormEnabled = isPreChatFormEnabled;
+
+            if(isPreChatFormEnabled == YES && chatConfigurationOptions[@"preChatFormOptions"]) {
+                chatConfiguration.preChatFormConfiguration = [self getPreChatFormConfiguration: chatConfigurationOptions[@"preChatFormOptions"]];
+            }
+        }
+    }
+    
+    return chatConfiguration;
+}
+
+- (ZDKHelpCenterUiConfiguration *) filterHelpCenterArticles: (NSDictionary*)filterOptions {
+    ZDKHelpCenterUiConfiguration* hcConfig = [ZDKHelpCenterUiConfiguration new];
+    if (filterOptions[@"type"] && [filterOptions[@"type"] isEqualToString:@"category"]) {
+      NSLog(@"%@ filter articles by category with values: %@", LOG_TAG, filterOptions[@"values"]);
+      [hcConfig setGroupType:ZDKHelpCenterOverviewGroupTypeCategory];
+      [hcConfig setGroupIds:filterOptions[@"values"]];
+    }
+    else if (filterOptions[@"type"] && [filterOptions[@"type"] isEqualToString:@"section"]) {
+      NSLog(@"%@ filter articles by section with values: %@", LOG_TAG, filterOptions[@"values"]);
+      [hcConfig setGroupType:ZDKHelpCenterOverviewGroupTypeSection];
+      [hcConfig setGroupIds:filterOptions[@"values"]];
+    }
+    else if (filterOptions[@"values"]) {
+      NSLog(@"%@ filter articles by label with values: %@", LOG_TAG, filterOptions[@"values"]);
+      [hcConfig setLabels:filterOptions[@"values"]];
+    }
+    
+    return hcConfig;
+}
+
+- (void) chatCloseClicked {
     UIViewController *topController = [UIApplication sharedApplication].keyWindow.rootViewController;
     while (topController.presentedViewController) {
         topController = topController.presentedViewController;
     }
-
-    UINavigationController *navControl = [[UINavigationController alloc] initWithRootViewController: controller];
-    [topController presentViewController:navControl animated:YES completion:nil];
+    [topController dismissViewControllerAnimated: TRUE completion: NULL];
 }
 
-- (void) startChatFunction:(NSDictionary *)options {
+- (void) startChatFunction: (NSDictionary *)options {
     ZDKMessagingConfiguration *messagingConfiguration = [ZDKMessagingConfiguration new];
-    NSString *botName = @"ChatBot";
+    
+    NSString *botName = @"Answer Bot";
+
     if (options[@"botName"]) {
       botName = options[@"botName"];
     }
+    
     messagingConfiguration.name = botName;
-
-    if (options[@"botImage"]) {
-      messagingConfiguration.botAvatar = options[@"botImage"];
-    }
 
     NSError *error = nil;
     NSMutableArray *engines = [[NSMutableArray alloc] init];
+    
     if (options[@"chatOnly"]) {
       engines = @[
-        (id <ZDKEngine>) [ZDKChatEngine engineAndReturnError:&error]
-    ];
-    } else {
-      engines = @[
-        (id <ZDKEngine>) [ZDKAnswerBotEngine engineAndReturnError:&error],
-        (id <ZDKEngine>) [ZDKChatEngine engineAndReturnError:&error],
-        (id <ZDKEngine>) [ZDKSupportEngine engineAndReturnError:&error], 
+        (id <ZDKEngine>) [ZDKChatEngine engineAndReturnError: &error]
       ];
     }
-    ZDKChatConfiguration *chatConfiguration = [[ZDKChatConfiguration alloc] init];
-    chatConfiguration.isPreChatFormEnabled = YES;
-    chatConfiguration.isAgentAvailabilityEnabled = YES;
+    else {
+      engines = @[
+        (id <ZDKEngine>) [ZDKAnswerBotEngine engineAndReturnError: &error],
+        (id <ZDKEngine>) [ZDKChatEngine engineAndReturnError: &error],
+        (id <ZDKEngine>) [ZDKSupportEngine engineAndReturnError: &error]
+      ];
+    }
 
-    UIViewController *chatController =[ZDKMessaging.instance buildUIWithEngines:engines
-                                                                        configs:@[messagingConfiguration, chatConfiguration]
-                                                                            error:&error];
+    ZDKChatConfiguration *chatConfiguration = [self getChatConfiguration: options[@"chatConfigurationOptions"]];
+    
+    UIViewController *chatViewController = [[ZDKMessaging instance] buildUIWithEngines: engines
+                                                                    configs: @[messagingConfiguration, chatConfiguration]
+                                                                    error: &error];
     if (error) {
-      NSLog(@"Error occured %@", error);
+      NSLog(@"%@ Error occured %@", LOG_TAG, error);
     }
-    chatController.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle: @"Close"
-                                                                                       style: UIBarButtonItemStylePlain
-                                                                                      target: self
-                                                                                      action: @selector(chatClosedClicked)];
+    
+    UIBarButtonItem *buttonClose = [[UIBarButtonItem alloc] initWithBarButtonSystemItem: UIBarButtonSystemItemStop
+                                                            target: self
+                                                            action: @selector(chatCloseClicked)];
 
+    if (options[@"closeButtonText"]) {
+        buttonClose = [[UIBarButtonItem alloc] initWithTitle: options[@"closeButtonText"]
+                                               style: UIBarButtonItemStylePlain
+                                               target: self
+                                               action: @selector(chatCloseClicked)];
+    }
+    
+    chatViewController.navigationItem.leftBarButtonItem = buttonClose;
 
-        UIViewController *topController = [UIApplication sharedApplication].keyWindow.rootViewController;
-        while (topController.presentedViewController) {
-            topController = topController.presentedViewController;
-        }
+    UIViewController *topViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
+    
+    while (topViewController.presentedViewController) {
+        topViewController = topViewController.presentedViewController;
+    }
 
-        UINavigationController *navControl = [[UINavigationController alloc] initWithRootViewController: chatController];
-        [topController presentViewController:navControl animated:YES completion:nil];
+    UINavigationController *navigationViewController = [[UINavigationController alloc] initWithRootViewController: chatViewController];
+    
+    [topViewController presentViewController: navigationViewController animated: YES completion: nil];
+    NSLog(@"%@ Started Chat with success!", LOG_TAG);
 }
 
-- (void) chatClosedClicked {
-    UIViewController *topController = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (topController.presentedViewController) {
-        topController = topController.presentedViewController;
+- (void) showHelpCenterFunction: (NSDictionary *)options {
+    NSError *error = nil;
+    NSArray *engines = @[];
+    
+    if (options[@"withChat"]) {
+        engines = @[
+          (id <ZDKEngine>) [ZDKChatEngine engineAndReturnError: &error]
+        ];
     }
-    [topController dismissViewControllerAnimated:TRUE completion:NULL];
+    
+    ZDKHelpCenterUiConfiguration* helpCenterUiConfig = [ZDKHelpCenterUiConfiguration new];
+    ZDKArticleUiConfiguration* articleUiConfig = [ZDKArticleUiConfiguration new];
+    
+    if(options[@"articlesFilter"] && options[@"articlesFilter"] != Nil && options[@"articlesFilter"] != NULL) {
+      helpCenterUiConfig = [self filterHelpCenterArticles: options[@"articlesFilter"]];
+    }
+
+    if (options[@"disableTicketCreation"]) {
+      helpCenterUiConfig.showContactOptions = NO;
+      articleUiConfig.showContactOptions = NO;
+    }
+    
+    helpCenterUiConfig.objcEngines = engines;
+    articleUiConfig.objcEngines = engines;
+    
+    UIViewController *topViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
+    
+    while (topViewController.presentedViewController) {
+        topViewController = topViewController.presentedViewController;
+    }
+    
+    UIViewController* viewController = [ZDKHelpCenterUi buildHelpCenterOverviewUiWithConfigs: @[helpCenterUiConfig, articleUiConfig]];
+
+    UINavigationController *navigationViewController = [[UINavigationController alloc] initWithRootViewController: viewController];
+    
+    [topViewController presentViewController: navigationViewController animated: YES completion: nil];
+    NSLog(@"%@ Showed Help Center with success!", LOG_TAG);
 }
 
-- (void) registerForNotifications:(NSData *)deviceToken {
-   [ZDKChat registerPushToken:deviceToken];
+RCT_EXPORT_METHOD(init: (NSDictionary *)options) {
+  NSLog(@"%@ accountKey: %@, appId: %@, clientId: %@, supportUrl: %@", LOG_TAG, options[@"accountKey"], options[@"appId"], options[@"clientId"], options[@"supportUrl"]);
+    
+  [ZDKZendesk initializeWithAppId: options[@"appId"]
+              clientId: options[@"clientId"]
+              zendeskUrl: options[@"supportUrl"]];
+  [ZDKSupport initializeWithZendesk: [ZDKZendesk instance]];
+  [ZDKAnswerBot initializeWithZendesk: [ZDKZendesk instance] support: [ZDKSupport instance]];
+  [ZDKChat initializeWithAccountKey: options[@"accountKey"] queue: dispatch_get_main_queue()];
+  NSLog(@"%@ Init all Unified SDKs with success!", LOG_TAG);
+}
+
+RCT_EXPORT_METHOD(initChat: (NSString *)accountKey) {
+  [ZDKChat initializeWithAccountKey: accountKey queue: dispatch_get_main_queue()];
+  NSLog(@"%@ Init Chat SDK with success!", LOG_TAG);
+}
+
+RCT_EXPORT_METHOD(resetUserIdentity) {
+    [[ZDKChat instance] resetIdentity:^{
+        // Identity was reset
+        NSLog(@"%@ User identity was reset with success.", LOG_TAG);
+    }];
+}
+
+RCT_EXPORT_METHOD(setUserIdentity: (NSDictionary *)userIdentityInfo) {
+  if (userIdentityInfo[@"token"]) {
+    id<ZDKObjCIdentity> userIdentity = [[ZDKObjCJwt alloc] initWithToken: userIdentityInfo[@"token"]];
+    [[ZDKZendesk instance] setIdentity: userIdentity];
+    NSLog(@"%@ User Identity set with token: %@", LOG_TAG, userIdentityInfo[@"token"]);
+  }
+  else {
+    id<ZDKObjCIdentity> userIdentity = [[ZDKObjCAnonymous alloc] initWithName: userIdentityInfo[@"name"] email: userIdentityInfo[@"email"]];
+    [[ZDKZendesk instance] setIdentity: userIdentity];
+    NSLog(@"%@ User Identity set with name: %@ and email: %@", LOG_TAG, userIdentityInfo[@"name"], userIdentityInfo[@"email"]);
+  }
+}
+
+RCT_EXPORT_METHOD(setVisitorInfo: (NSDictionary *)visitorInfo) {
+  ZDKChatAPIConfiguration *config = [[ZDKChatAPIConfiguration alloc] init];
+    
+  if (visitorInfo[@"department"] && visitorInfo[@"department"] != Nil && visitorInfo[@"department"] != NULL) {
+    config.department = visitorInfo[@"department"];
+  }
+    
+  if (visitorInfo[@"tags"]) {
+    config.tags = visitorInfo[@"tags"];
+  }
+    
+  config.visitorInfo = [[ZDKVisitorInfo alloc] initWithName: visitorInfo[@"name"]
+                                               email: visitorInfo[@"email"]
+                                               phoneNumber: visitorInfo[@"phone"]];
+  ZDKChat.instance.configuration = config;
+  
+  NSLog(@"%@ Visitor Info set with success: %@", LOG_TAG, visitorInfo);
+}
+
+RCT_EXPORT_METHOD(setPrimaryColor: (NSString *)color) {
+  [ZDKCommonTheme currentTheme].primaryColor = [self colorFromHexString: color];
+}
+
+RCT_EXPORT_METHOD(setNotificationToken: (NSData *)token) {
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    [ZDKChat registerPushToken: token];
+  });
+}
+
+RCT_EXPORT_METHOD(startChat: (NSDictionary *)options) {
+  if(options[@"userIdentity"]) {
+    [self setUserIdentity: options[@"userIdentity"]];
+  }
+    
+  if(options[@"visitorInfo"]) {
+    [self setVisitorInfo: options[@"visitorInfo"]];
+  }
+
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    [self startChatFunction: options];
+  });
+}
+
+RCT_EXPORT_METHOD(showHelpCenter: (NSDictionary *)options) {
+  if(options[@"userIdentity"]) {
+    [self setUserIdentity: options[@"userIdentity"]];
+  }
+    
+  if(options[@"visitorInfo"]) {
+    [self setVisitorInfo: options[@"visitorInfo"]];
+  }
+    
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    [self showHelpCenterFunction: options];
+  });
 }
 
 @end

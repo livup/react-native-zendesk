@@ -1,23 +1,22 @@
-
 buildscript {
     repositories {
-        jcenter()
+        mavenCentral()
+        google()
     }
-
     dependencies {
-        classpath 'com.android.tools.build:gradle:1.3.1'
+        classpath 'com.android.tools.build:gradle:7.0.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.20"
     }
 }
 
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 28
-    buildToolsVersion "28.0.1"
+    compileSdkVersion 31
 
     defaultConfig {
-        minSdkVersion 16
-        targetSdkVersion 22
+        minSdkVersion 21
+        targetSdkVersion 31
         versionCode 1
         versionName "1.0"
     }
@@ -27,15 +26,16 @@ android {
 }
 
 repositories {
-    mavenCentral()
+    google()
+    jcenter()
     maven { url 'https://zendesk.jfrog.io/zendesk/repo' }
 }
 
 dependencies {
     implementation 'com.facebook.react:react-native:+'
-    api group: 'com.zendesk', name: 'chat', version: '2.0.0'
-    api group: 'com.zendesk', name: 'answerbot', version: '2.0.0'
-    api group: 'com.zendesk', name: 'messaging', version: '4.2.1'
-    api group: 'com.zendesk', name: 'support', version: '4.0.0'
+    api group: 'com.zendesk', name: 'messaging', version: '5.2.0'
+    api group: 'com.zendesk', name: 'support', version: '5.0.3'
+    api group: 'com.zendesk', name: 'answerbot', version: '3.0.2'
+    api group: 'com.zendesk', name: 'chat', version: '3.3.0'
 }
-  
+
