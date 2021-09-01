@@ -18,6 +18,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import zendesk.chat.ChatMenuAction;
+import zendesk.chat.ChatSessionStatus;
+import zendesk.chat.ChatState;
+import zendesk.chat.ObservationScope;
+import zendesk.chat.Observer;
 import zendesk.chat.PreChatFormFieldStatus;
 import zendesk.configurations.Configuration;
 import zendesk.core.Zendesk;
@@ -47,6 +51,8 @@ public class RNZendeskChat extends ReactContextBaseJavaModule {
 
     private ReactContext appContext;
     private static final String TAG = "RNZendeskChat";
+    private boolean isVisitorInfoSet = false;
+    private VisitorInfo builtVisitorInfo = null;
 
     public RNZendeskChat(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -56,6 +62,28 @@ public class RNZendeskChat extends ReactContextBaseJavaModule {
     @Override
     public String getName() {
         return "RNZendeskChat";
+    }
+
+    private void setupChatObserver(){
+        isVisitorInfoSet = false;
+        final ObservationScope observationScope = new ObservationScope();
+        final ProfileProvider profileProvider =  Chat.INSTANCE.providers().profileProvider();
+
+        Chat.INSTANCE.providers().chatProvider().observeChatState(observationScope, new Observer<ChatState>() {
+            @Override
+            public void update(ChatState chatState) {
+                ChatSessionStatus chatStatus = chatState.getChatSessionStatus();
+                // Status achieved after the PreChatForm is completed
+                if (chatStatus == ChatSessionStatus.STARTED) {
+                    // Update the information MID chat here. All info but Department can be updated
+                    if (!isVisitorInfoSet && builtVisitorInfo != null) {
+                        profileProvider.setVisitorInfo(builtVisitorInfo, null);
+                        isVisitorInfoSet = true;
+                        Log.d(TAG, "[observerSetup] - Updated VisitorInfo!");
+                    }
+                }
+            }
+        });
     }
 
     private ChatConfiguration getChatConfiguration(ReadableMap chatConfigurationOptions) {
@@ -225,13 +253,6 @@ public class RNZendeskChat extends ReactContextBaseJavaModule {
             Log.d(TAG, "Can't set department because Chat provider is null");
         }
 
-        ProfileProvider profileProvider = providers.profileProvider();
-
-        if (profileProvider == null) {
-            Log.d(TAG, "Can't set visitor info, because Profile provider is null");
-            return;
-        }
-
         VisitorInfo.Builder visitorInfoBuilder = VisitorInfo.builder();
 
         if (visitorInfo.hasKey("name")) {
@@ -247,8 +268,13 @@ public class RNZendeskChat extends ReactContextBaseJavaModule {
             visitorInfoBuilder.withPhoneNumber(phone);
         }
 
-        VisitorInfo builtVisitorInfo = visitorInfoBuilder.build();
-        profileProvider.setVisitorInfo(builtVisitorInfo, null);
+        builtVisitorInfo = visitorInfoBuilder.build();
+
+        ProfileProvider profileProvider = providers.profileProvider();
+        if (profileProvider == null) {
+            Log.d(TAG, "Can't set visitor info, because Profile provider is null");
+            return;
+        }
 
         if(visitorInfo.hasKey("tags")) {
             ReadableArray readableTags = visitorInfo.getArray("tags");
@@ -317,6 +343,8 @@ public class RNZendeskChat extends ReactContextBaseJavaModule {
         if(options.hasKey("chatConfigurationOptions")) {
             chatConfigOptions = options.getMap("chatConfigurationOptions");
         }
+
+        setupChatObserver();
 
         messagingActivityBuilder.show(activity, getChatConfiguration(chatConfigOptions));
         Log.d(TAG, "Started Chat with success!");
