@@ -1,6 +1,10 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [Version 0.3.1](https://github.com/livup/react-native-zendesk/compare/0.3.0...0.3.1) - 2021-09-01
+### **Only Android**
+- Add chat observer to update visitor info properly
+
 ## [Version 0.3.0](https://github.com/livup/react-native-zendesk/compare/0.2.2...0.3.0) - 2021-08-27
 
 ### **Typescript**
